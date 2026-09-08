@@ -10,8 +10,13 @@ Portal URLs:
 
 import time
 from pathlib import Path
-from typing import Optional, Tuple, Callable, Dict, Any, List
-from playwright.sync_api import sync_playwright, BrowserContext, Page, Playwright
+try:
+    from playwright.sync_api import sync_playwright, BrowserContext, Page, Playwright
+except (ImportError, ModuleNotFoundError, Exception):
+    sync_playwright = None
+    BrowserContext = Any
+    Page = Any
+    Playwright = Any
 
 from config import DATA_DIR, DEFAULT_WATCH_DIR
 

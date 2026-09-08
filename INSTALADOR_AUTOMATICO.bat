@@ -53,7 +53,7 @@ if not errorlevel 1 goto dependencies_ok
 
 echo [+] Instalando bibliotecas necessarias do requirements.txt...
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt playwright
 if errorlevel 1 (
     echo [X] Falha ao instalar pacotes. Verifique sua conexao com a internet.
     pause

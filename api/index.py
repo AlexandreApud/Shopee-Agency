@@ -21,11 +21,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from services import (
-    ExcelLoader,
-    LeadTimeCalculator,
-    RevenueCalculator,
-)
+from services.excel_loader import ExcelLoader
+from services.lead_time_calculator import LeadTimeCalculator
+from services.revenue_calculator import RevenueCalculator
 from models import LeadTimeSummary, RevenueSummary
 
 app = FastAPI(
@@ -36,12 +34,16 @@ app = FastAPI(
 
 
 @app.get("/api/health")
+@app.get("/health")
 def health_check():
     """Health check endpoint for monitoring."""
     return {"status": "online", "platform": "Vercel Serverless", "service": "Shopee Agency Pro"}
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
+@app.get("/api")
+@app.get("/api/index")
+@app.get("/api/index.py")
 def serve_dashboard():
     """Serves the interactive modern SaaS web dashboard."""
     html_content = """<!DOCTYPE html>
@@ -348,6 +350,8 @@ def serve_dashboard():
 
 
 @app.post("/api/calculate")
+@app.post("/calculate")
+@app.post("/api/index/calculate")
 async def calculate_metrics(
     dropoff_file: Optional[UploadFile] = File(None),
     collection_file: Optional[UploadFile] = File(None),

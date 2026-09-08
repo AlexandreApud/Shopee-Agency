@@ -22,8 +22,10 @@ from services import (
     PortalSyncer,
 )
 from services.monthly_engine import MonthlyEngine
-from database.repository import PackageRepository
-from ui.app_window import run_gui
+try:
+    from ui.app_window import run_gui
+except (ImportError, ModuleNotFoundError):
+    run_gui = None
 
 # Expose 'app' ASGI application for Vercel Serverless Runtime
 try:

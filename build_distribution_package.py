@@ -123,7 +123,7 @@ echo.
 echo [3/5] Instalando bibliotecas necessarias (pandas, openpyxl, playwright)...
 cd /d "%TARGET_DIR%"
 python -m pip install --upgrade pip >nul 2>&1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt playwright
 echo [OK] Bibliotecas instaladas.
 
 :: 5. Verificar navegador do robo
