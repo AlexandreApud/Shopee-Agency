@@ -22,6 +22,7 @@ from services import (
     PortalSyncer,
 )
 from services.monthly_engine import MonthlyEngine
+from database import PackageRepository
 try:
     from ui.app_window import run_gui
 except (ImportError, ModuleNotFoundError):
