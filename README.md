@@ -1,7 +1,7 @@
 # Shopee Agency Pro 🚀
 ### Gestão Financeira, Lead Time Útil da Agência & Automação Shopee SPX
 
-[![CI Test Suite](https://github.com/alexandre/shopee-agency-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/alexandre/shopee-agency-pro/actions/workflows/ci.yml)
+[![CI Test Suite](https://github.com/AlexandreApud/Shopee-Agency/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexandreApud/Shopee-Agency/actions/workflows/ci.yml)
 ![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)
 ![License](https://img.shields.io/badge/license-Proprietary-red.svg)
 ![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen.svg)
