@@ -133,25 +133,98 @@ class PortalSyncer:
         if on_status:
             on_status(f"Navegando para {report_label}...")
 
-        page.goto(url, wait_until="networkidle", timeout=50000)
-        page.wait_for_timeout(2000)
+        page.goto(url, wait_until="domcontentloaded", timeout=50000)
+        page.wait_for_timeout(3000)
 
         # Session check
-        if "login" in page.url.lower():
-            raise PermissionError("A sessão da Shopee expirou. Faça login com o Google novamente.")
+        current_url = page.url.lower()
+        if "login" in current_url or "google" in current_url or "accounts.google" in current_url:
+            raise PermissionError("A sessão da Shopee expirou ou não foi concluída. Execute 'python main.py --login' para conectar com o Google.")
+
+        # Dismiss potential Shopee notice or announcement modals
+        for close_sel in [
+            ".ant-modal-close",
+            "button.ant-modal-close",
+            "button:has-text('Entendi')",
+            "button:has-text('Got it')",
+            "button:has-text('OK')",
+            "button:has-text('Close')",
+            "button:has-text('Confirm')",
+        ]:
+            try:
+                modal_btn = page.locator(close_sel).first
+                if modal_btn.is_visible(timeout=1000):
+                    modal_btn.click()
+                    page.wait_for_timeout(800)
+            except Exception:
+                pass
 
         if on_status:
             on_status(f"Acionando exportação em {report_label}...")
 
-        # 1. Main Export button
-        export_btn = page.locator("button:has-text('Export'), button:has-text('Exportar')").first
-        export_btn.wait_for(state="visible", timeout=15000)
-        export_btn.click()
+        # 1. Main Export button with resilient multi-selector fallback
+        export_clicked = False
+        export_selectors = [
+            "button:has-text('Export')",
+            "button:has-text('Exportar')",
+            "[role='button']:has-text('Export')",
+            "[role='button']:has-text('Exportar')",
+            ".ant-dropdown-trigger",
+            "button.ant-btn:has-text('Export')",
+            "button.ant-btn:has-text('Exportar')",
+            "div.ant-dropdown-trigger",
+            "span:has-text('Export')",
+        ]
+
+        for sel in export_selectors:
+            try:
+                loc = page.locator(sel).first
+                if loc.is_visible(timeout=2500):
+                    loc.click()
+                    export_clicked = True
+                    break
+            except Exception:
+                continue
+
+        if not export_clicked:
+            # Take screenshot for diagnostic inspection
+            debug_img = DATA_DIR / f"debug_export_{report_label.lower().replace(' ', '_')}.png"
+            try:
+                page.screenshot(path=str(debug_img))
+                if on_status:
+                    on_status(f"Aviso: Screenshot da tela salvo em {debug_img}")
+            except Exception:
+                pass
+            raise TimeoutError(f"Não foi possível localizar o botão 'Export' em {report_label}. Verifique a tela ou se o login foi concluído.")
+
         page.wait_for_timeout(1000)
 
-        # 2. Popover Export option
-        popover_export = page.locator("div, li, span, button").filter(has_text="Export").filter(has_not_text="History").last
-        popover_export.click()
+        # 2. Popover Export option (sub-item)
+        popover_clicked = False
+        popover_selectors = [
+            ".ant-dropdown-menu-item:has-text('Export'):not(:has-text('History'))",
+            ".ant-dropdown-menu-item:has-text('Exportar'):not(:has-text('Histórico'))",
+            "li:has-text('Export'):not(:has-text('History'))",
+            "div.ant-dropdown:has-text('Export'):not(:has-text('History'))",
+        ]
+
+        for p_sel in popover_selectors:
+            try:
+                p_loc = page.locator(p_sel).first
+                if p_loc.is_visible(timeout=2500):
+                    p_loc.click()
+                    popover_clicked = True
+                    break
+            except Exception:
+                continue
+
+        if not popover_clicked:
+            try:
+                fallback_popover = page.locator("div, li, span, button").filter(has_text="Export").filter(has_not_text="History").last
+                fallback_popover.click()
+            except Exception:
+                pass
+
         page.wait_for_timeout(2500)
 
     def _fetch_and_download_latest_task(
