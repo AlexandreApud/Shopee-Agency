@@ -9,16 +9,27 @@ Provides:
 
 import sys
 import os
+import time
+import logging
+import traceback
 import tempfile
 from pathlib import Path
 from typing import Optional
+
+# Setup standard logging for Vercel Runtime Logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("shopee_agency_web")
+logger.info("Initializing Shopee Agency Pro Serverless Application...")
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from services.excel_loader import ExcelLoader
@@ -33,10 +44,50 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def log_and_catch_exceptions(request: Request, call_next):
+    """Logs incoming requests and catches any uncaught serverless exceptions with full traceback."""
+    start_time = time.time()
+    logger.info(">>> INCOMING: %s %s", request.method, request.url.path)
+    try:
+        response = await call_next(request)
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.info("<<< COMPLETED: %s %s -> Status %d (%.1fms)", request.method, request.url.path, response.status_code, elapsed_ms)
+        return response
+    except Exception as exc:
+        elapsed_ms = (time.time() - start_time) * 1000
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        logger.error("!!! CRITICAL EXCEPTION on %s %s (%.1fms):\n%s", request.method, request.url.path, elapsed_ms, tb)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal Server Error",
+                "detail": str(exc),
+                "traceback": tb,
+            },
+        )
+
+
+@app.get("/api/debug")
+@app.get("/debug")
+def debug_environment():
+    """Diagnostic endpoint to inspect serverless environment runtime."""
+    return {
+        "status": "ok",
+        "python_version": sys.version,
+        "cwd": os.getcwd(),
+        "is_vercel": os.environ.get("VERCEL", "0"),
+        "vercel_env": os.environ.get("VERCEL_ENV", "local"),
+        "vercel_region": os.environ.get("VERCEL_REGION", "unknown"),
+        "temp_dir": tempfile.gettempdir(),
+    }
+
+
 @app.get("/api/health")
 @app.get("/health")
 def health_check():
     """Health check endpoint for monitoring."""
+    logger.info("Health check ping received.")
     return {"status": "online", "platform": "Vercel Serverless", "service": "Shopee Agency Pro"}
 
 
@@ -352,6 +403,7 @@ def serve_dashboard():
 @app.post("/api/calculate")
 @app.post("/calculate")
 @app.post("/api/index/calculate")
+@app.post("/api/index.py/calculate")
 async def calculate_metrics(
     dropoff_file: Optional[UploadFile] = File(None),
     collection_file: Optional[UploadFile] = File(None),
@@ -382,7 +434,7 @@ async def calculate_metrics(
         # 1. Process Drop-off if provided
         if dropoff_file and dropoff_file.filename:
             suffix = Path(dropoff_file.filename).suffix
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_drop:
+            with tempfile.NamedTemporaryFile(delete=False, prefix="dropoff_", suffix=suffix) as tmp_drop:
                 content = await dropoff_file.read()
                 tmp_drop.write(content)
                 temp_drop_path = Path(tmp_drop.name)
@@ -396,13 +448,20 @@ async def calculate_metrics(
         # 2. Process Collection if provided
         if collection_file and collection_file.filename:
             suffix = Path(collection_file.filename).suffix
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_coll:
+            with tempfile.NamedTemporaryFile(delete=False, prefix="collection_", suffix=suffix) as tmp_coll:
                 content = await collection_file.read()
                 tmp_coll.write(content)
                 temp_coll_path = Path(tmp_coll.name)
 
-            loader_coll = ExcelLoader(temp_coll_path)
-            df_coll_raw, _, _, _, _ = loader_coll.load_data()
+            try:
+                loader_coll = ExcelLoader(temp_coll_path)
+                df_coll_raw, _, _, _, _ = loader_coll.load_data()
+            except Exception as coll_err:
+                logger.warning("Standard column detection for collection fallback to raw: %s", coll_err)
+                if suffix.lower() == ".csv":
+                    df_coll_raw = ExcelLoader._load_csv_safely(temp_coll_path)
+                else:
+                    df_coll_raw = pd.read_excel(temp_coll_path)
 
         # 3. Consolidated Revenue calculation
         _, _, rev_summary = rev_calc.process_consolidated_revenue(

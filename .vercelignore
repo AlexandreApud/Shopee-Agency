@@ -1,0 +1,15 @@
+# Files and directories ignored during Vercel deployment
+main.py
+iniciar_calculadora.bat
+iniciar_calculadora.vbs
+INSTALADOR_AUTOMATICO.bat
+build_distribution_package.py
+create_shortcut.vbs
+tests/
+ui/
+data/
+*.bat
+*.vbs
+dist/
+scratch/
+output/

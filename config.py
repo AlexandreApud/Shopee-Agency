@@ -7,17 +7,22 @@ from datetime import time
 from pathlib import Path
 from typing import Optional
 
+import os
+import tempfile
+
 # Base project directory
 BASE_DIR = Path(__file__).resolve().parent
 
-# Default watch directory for scanning input files (resolves to C:\Users\<user>\Downloads on any PC)
-DEFAULT_WATCH_DIR = Path.home() / "Downloads"
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+
+# Default watch directory for scanning input files (resolves to Downloads locally, or /tmp in serverless)
+DEFAULT_WATCH_DIR = Path(tempfile.gettempdir()) if IS_VERCEL else (Path.home() / "Downloads")
 
 # Default directory to save standalone output results if not updating in-place
-DEFAULT_OUTPUT_DIR = BASE_DIR / "output"
+DEFAULT_OUTPUT_DIR = (Path(tempfile.gettempdir()) / "output") if IS_VERCEL else (BASE_DIR / "output")
 
 # Directory for local database and persistent browser profile storage
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = (Path(tempfile.gettempdir()) / "data") if IS_VERCEL else (BASE_DIR / "data")
 
 # --- Operating Business Schedule (Agency Open Hours) ---
 # Monday to Friday: 08:00 to 19:30

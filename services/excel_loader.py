@@ -58,20 +58,20 @@ class ExcelLoader:
             # Collection report schema
             tag_col_name = ""
             inbound_col_name = self._find_column_by_name_or_index(
-                df, preferred_index=COLLECTION_INBOUND_COL_INDEX, keywords=["recebimento", "inbound"]
+                df, preferred_index=COLLECTION_INBOUND_COL_INDEX, keywords=["recebimento", "inbound", "received"]
             )
             outbound_col_name = self._find_column_by_name_or_index(
-                df, preferred_index=COLLECTION_OUTBOUND_COL_INDEX, keywords=["envio", "outbound"]
+                df, preferred_index=COLLECTION_OUTBOUND_COL_INDEX, keywords=["envio", "outbound", "retirada", "shipped"]
             )
         else:
             # Drop-off report schema
             file_type = FILE_TYPE_DROPOFF
             tag_col_name = self._find_column_by_name_or_index(df, preferred_index=1, keywords=["tag"])
             inbound_col_name = self._find_column_by_name_or_index(
-                df, preferred_index=INBOUND_TIME_COL_INDEX, keywords=["recebimento", "inbound"]
+                df, preferred_index=INBOUND_TIME_COL_INDEX, keywords=["recebimento", "inbound", "received"]
             )
             outbound_col_name = self._find_column_by_name_or_index(
-                df, preferred_index=OUTBOUND_TIME_COL_INDEX, keywords=["envio", "outbound"]
+                df, preferred_index=OUTBOUND_TIME_COL_INDEX, keywords=["envio", "outbound", "shipped"]
             )
 
         return df, file_type, tag_col_name, inbound_col_name, outbound_col_name
