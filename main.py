@@ -25,6 +25,12 @@ from services.monthly_engine import MonthlyEngine
 from database.repository import PackageRepository
 from ui.app_window import run_gui
 
+# Expose 'app' ASGI application for Vercel Serverless Runtime
+try:
+    from api.index import app
+except Exception:
+    app = None
+
 
 def display_monthly_report_from_db(month: str) -> None:
     """

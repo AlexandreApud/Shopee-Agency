@@ -4,3 +4,8 @@ openpyxl>=3.1.0
 
 # Browser automation engine for Shopee SPX portal
 playwright>=1.40.0
+
+# Web SaaS Framework & Serverless API for Vercel Cloud
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.9
