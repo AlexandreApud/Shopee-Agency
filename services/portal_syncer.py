@@ -284,7 +284,7 @@ class PortalSyncer:
 
     def sync_both_reports(
         self,
-        headless: bool = True,
+        headless: bool = False,
         on_status: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Optional[Path], Optional[Path]]:
         """

@@ -74,6 +74,23 @@ class LeadTimeApp(tk.Tk):
 
         # Automatically load current month stats on startup
         self._load_current_month_data()
+        self.bind("<FocusIn>", lambda e: self.refresh_session_status())
+        self._schedule_session_check()
+
+    def refresh_session_status(self) -> bool:
+        """Dynamically refreshes the Google/Shopee session indicator in the UI."""
+        saved = self.syncer.is_session_saved()
+        if hasattr(self, "lbl_session_status"):
+            if saved:
+                self.lbl_session_status.config(text="Sessão Google: Conectada ✅", fg="#198754")
+            else:
+                self.lbl_session_status.config(text="Sessão Google: Pendente ⚠️", fg="#DC3545")
+        return saved
+
+    def _schedule_session_check(self) -> None:
+        """Periodically refreshes session status every 5 seconds."""
+        self.refresh_session_status()
+        self.after(5000, self._schedule_session_check)
 
     def _setup_styles(self) -> None:
         """Configures ttk styles for clean visual appearance."""
@@ -730,7 +747,7 @@ class LeadTimeApp(tk.Tk):
     def _run_portal_sync(self) -> None:
         try:
             drop_file, coll_file = self.syncer.sync_both_reports(
-                headless=True, on_status=lambda msg: self.status_var.set(msg)
+                headless=False, on_status=lambda msg: self.status_var.set(msg)
             )
 
             if drop_file:
@@ -785,11 +802,17 @@ class LeadTimeApp(tk.Tk):
             else:
                 df_drop_lead = None
 
-            # 2. Load Collection
+            # 2. Load Collection with resilient fallback
             p_coll = Path(coll_path_str) if coll_path_str else None
             if p_coll and p_coll.exists():
-                loader_coll = ExcelLoader(p_coll)
-                df_coll_raw, _, _, _, _ = loader_coll.load_data()
+                try:
+                    loader_coll = ExcelLoader(p_coll)
+                    df_coll_raw, _, _, _, _ = loader_coll.load_data()
+                except Exception:
+                    if p_coll.suffix.lower() == ".csv":
+                        df_coll_raw = ExcelLoader._load_csv_safely(p_coll)
+                    else:
+                        df_coll_raw = pd.read_excel(p_coll)
             else:
                 df_coll_raw = None
 
