@@ -1,0 +1,6 @@
+# Core data processing and Excel engine
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# Browser automation engine for Shopee SPX portal
+playwright>=1.40.0
