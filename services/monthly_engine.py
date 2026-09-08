@@ -48,16 +48,40 @@ class MonthlyEngine:
         df_drop = self.repository.get_month_dropoff_orders(reference_month)
         df_coll = self.repository.get_month_collection_orders(reference_month)
 
-        # 1. Financial Revenue: Pool standard drop-off and collection into progressive tiers
+        # 1. Financial Revenue & Operational Breakdown
+        dispatched_drop_count = 0
+        pending_drop_count = 0
+        inbound_drop_count = 0
         return_count = 0
         standard_drop_count = 0
-        collection_count = len(df_coll)
 
         if not df_drop.empty:
-            is_return = df_drop["package_type"] == PACKAGE_TYPE_RETURN
+            is_dispatched = df_drop["outbound_time"].notna() & (df_drop["outbound_time"].astype(str).str.strip() != "") & (df_drop["outbound_time"].astype(str) != "nan")
+            dispatched_drop_count = int(is_dispatched.sum())
+            pending_drop_count = int((~is_dispatched).sum())
+
+            is_inbound_m = df_drop["inbound_time"].astype(str).str.startswith(reference_month)
+            inbound_drop_count = int(is_inbound_m.sum())
+
+            # Bill strictly dispatched packages (outbound) if available
+            billable_drop = df_drop[is_dispatched] if dispatched_drop_count > 0 else df_drop
+            is_return = billable_drop["package_type"] == PACKAGE_TYPE_RETURN
             return_count = int(is_return.sum())
             standard_drop_count = int((~is_return).sum())
 
+        collected_count = 0
+        pending_collection_count = 0
+        inbound_collection_count = 0
+        if not df_coll.empty:
+            is_collected = df_coll["outbound_time"].notna() & (df_coll["outbound_time"].astype(str).str.strip() != "") & (df_coll["outbound_time"].astype(str) != "nan")
+            collected_count = int(is_collected.sum())
+            pending_collection_count = int((~is_collected).sum())
+
+            is_inbound_c_m = df_coll["inbound_time"].astype(str).str.startswith(reference_month)
+            inbound_collection_count = int(is_inbound_c_m.sum())
+
+        # Billable collections (strictly completed outbound)
+        collection_count = collected_count if collected_count > 0 else len(df_coll)
         pooled_postagem_count = standard_drop_count + collection_count
 
         return_revenue = round(return_count * RETURN_FEE, 2)
@@ -79,23 +103,9 @@ class MonthlyEngine:
         total_packages_moved = return_count + pooled_postagem_count
         average_ticket = round(total_revenue / total_packages_moved, 2) if total_packages_moved > 0 else 0.0
 
-        # Detailed status breakdown for operational transparency
-        dispatched_drop_count = 0
-        pending_drop_count = 0
-        if not df_drop.empty:
-            is_dispatched = df_drop["outbound_time"].notna() & (df_drop["outbound_time"].astype(str).str.strip() != "") & (df_drop["outbound_time"].astype(str) != "nan")
-            dispatched_drop_count = int(is_dispatched.sum())
-            pending_drop_count = int((~is_dispatched).sum())
-
-        collected_count = 0
-        pending_collection_count = 0
-        if not df_coll.empty:
-            is_collected = df_coll["status"] == "Collected"
-            collected_count = int(is_collected.sum())
-            pending_collection_count = int((~is_collected).sum())
-
         total_dispatched_count = dispatched_drop_count + collected_count
         total_pending_count = pending_drop_count + pending_collection_count
+        inbound_total_count = inbound_drop_count + inbound_collection_count
 
         rev_summary = RevenueSummary(
             total_packages_moved=total_packages_moved,
@@ -121,6 +131,9 @@ class MonthlyEngine:
             pending_collection_count=pending_collection_count,
             total_dispatched_count=total_dispatched_count,
             total_pending_count=total_pending_count,
+            inbound_drop_count=inbound_drop_count,
+            inbound_collection_count=inbound_collection_count,
+            inbound_total_count=inbound_total_count,
         )
 
         # 2. Operational Lead Time: Strictly for Drop-off

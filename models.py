@@ -108,6 +108,9 @@ class RevenueSummary:
     pending_collection_count: int = 0
     total_dispatched_count: int = 0
     total_pending_count: int = 0
+    inbound_drop_count: int = 0
+    inbound_collection_count: int = 0
+    inbound_total_count: int = 0
 
     def to_metrics_dictionary(self) -> Dict[str, Any]:
         """Returns ordered financial metrics in Portuguese formatted for currency."""

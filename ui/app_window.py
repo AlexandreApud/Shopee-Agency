@@ -567,11 +567,10 @@ class LeadTimeApp(tk.Tk):
         )
 
         self.cur_card_volume_moved.lbl_value.config(
-            text=f"{rev_s.total_dispatched_count} / {rev_s.total_packages_moved} un"
-            if rev_s.total_pending_count > 0 else f"{rev_s.total_packages_moved} un"
+            text=f"{rev_s.total_dispatched_count} un faturáveis"
         )
         self.cur_card_volume_moved.lbl_sub.config(
-            text=f"Drop-off: {rev_s.dispatched_drop_count}/{rev_s.dispatched_drop_count + rev_s.pending_drop_count} saíram | Retiradas: {rev_s.collected_count}/{rev_s.collection_count} saíram"
+            text=f"Saíram: {rev_s.dispatched_drop_count} post. + {rev_s.collected_count} ret. | Recebidos: {rev_s.inbound_total_count} un | {rev_s.total_pending_count} no ponto"
         )
 
         if lead_s and lead_s.dispatched_packages > 0:
@@ -623,11 +622,10 @@ class LeadTimeApp(tk.Tk):
         )
 
         self.hist_card_volume_moved.lbl_value.config(
-            text=f"{rev_s.total_dispatched_count} / {rev_s.total_packages_moved} un"
-            if rev_s.total_pending_count > 0 else f"{rev_s.total_packages_moved} un"
+            text=f"{rev_s.total_dispatched_count} un faturáveis"
         )
         self.hist_card_volume_moved.lbl_sub.config(
-            text=f"Drop-off: {rev_s.dispatched_drop_count}/{rev_s.dispatched_drop_count + rev_s.pending_drop_count} saíram | Retiradas: {rev_s.collected_count}/{rev_s.collection_count} saíram"
+            text=f"Saíram: {rev_s.dispatched_drop_count} post. + {rev_s.collected_count} ret. | Recebidos: {rev_s.inbound_total_count} un | {rev_s.total_pending_count} no ponto"
         )
 
         # Tier breakdown detail string
