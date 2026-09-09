@@ -61,6 +61,34 @@ class PortalSyncer:
         default_dir = self.profile_dir / "Default"
         return default_dir.exists() and any(default_dir.iterdir())
 
+    def has_shopee_session(self) -> bool:
+        """
+        Directly checks the SQLite cookies database of the persistent browser profile.
+        Returns True if authenticated cookies for Shopee SPX or Google OAuth exist.
+        Safely opens in read-only mode to prevent interference with Chrome.
+        """
+        cookies_path = self.profile_dir / "Default" / "Network" / "Cookies"
+        if not cookies_path.exists():
+            cookies_path = self.profile_dir / "Default" / "Cookies"
+
+        if not cookies_path.exists():
+            return self.is_session_saved()
+
+        try:
+            import sqlite3
+            conn = sqlite3.connect(f"file:{cookies_path.resolve()}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM cookies WHERE host_key LIKE '%shopee%' OR host_key LIKE '%google%'"
+            )
+            count = cursor.fetchone()[0]
+            conn.close()
+            return count > 0
+        except Exception:
+            # Fallback if SQLite is temporarily locked by active browser
+            return self.is_session_saved()
+
+
     def open_browser_for_login(self, on_status: Optional[Callable[[str], None]] = None) -> bool:
         """
         Launches an interactive Chrome window with the persistent profile.
@@ -124,7 +152,7 @@ class PortalSyncer:
             except Exception:
                 pass
 
-        return logged_in or self.is_session_saved()
+        return logged_in or self.has_shopee_session()
 
     def _trigger_page_export(self, page: Page, url: str, report_label: str, on_status: Optional[Callable[[str], None]]) -> None:
         """

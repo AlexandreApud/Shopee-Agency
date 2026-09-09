@@ -5,6 +5,7 @@ Graphical User Interface (GUI) module for Shopee Drop-off & Collection Lead Time
 - Excludes Collection from Lead Time (strictly measures Drop-off in agency business hours).
 - Pools Postagens and Retiradas in progressive monthly tiers (from R$ 0,70).
 - Local SQLite database persistence and multi-month historical navigation.
+- Modern responsive layout with native window maximization ('zoomed') and scrollable viewport.
 """
 
 import os
@@ -33,9 +34,59 @@ from database.repository import PackageRepository
 from models import LeadTimeSummary, RevenueSummary
 
 
+class ScrollableFrame(tk.Frame):
+    """
+    A responsive scrollable container that expands to fill the available width
+    and supports vertical scrolling via mouse wheel and scrollbar.
+    """
+
+    def __init__(self, parent: tk.Widget, bg: str = "#F8FAFC", **kwargs):
+        super().__init__(parent, bg=bg, **kwargs)
+
+        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_content = tk.Frame(self.canvas, bg=bg)
+
+        self.scrollable_content.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+
+        self.canvas_window = self.canvas.create_window(
+            (0, 0), window=self.scrollable_content, anchor="nw"
+        )
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Expand inner frame to match canvas width on resize
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        # Bind mousewheel recursively
+        self.bind_mousewheel(self)
+        self.bind_mousewheel(self.canvas)
+        self.bind_mousewheel(self.scrollable_content)
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        """Ensures inner frame expands to match current canvas width."""
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+
+    def bind_mousewheel(self, widget: tk.Widget) -> None:
+        """Recursively binds mouse wheel scrolling across children."""
+        widget.bind("<MouseWheel>", self._on_mousewheel, add="+")
+        for child in widget.winfo_children():
+            self.bind_mousewheel(child)
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        """Scrolls canvas with mouse wheel."""
+        if self.canvas.winfo_exists():
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
 class LeadTimeApp(tk.Tk):
     """
-    Main application window providing a clean, tabbed interface for:
+    Main application window providing a clean, modern, tabbed interface:
     - Tab 1: Current Month daily operations, SPX sync, and live KPIs.
     - Tab 2: Historical past months query and monthly Excel export.
     """
@@ -43,9 +94,23 @@ class LeadTimeApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Shopee Agency Pro - Gestão Financeira, Lead Time Útil & Histórico")
-        self.geometry("980x880")
-        self.minsize(920, 780)
-        self.configure(bg="#F4F6F9")
+
+        # Set window icon if available
+        icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if icon_path.exists():
+            try:
+                self.iconbitmap(str(icon_path))
+            except Exception:
+                pass
+
+        # Responsive window setup: Start natively maximized on Windows
+
+        try:
+            self.state("zoomed")
+        except Exception:
+            self.geometry("1100x850")
+        self.minsize(980, 700)
+        self.configure(bg="#F8FAFC")
 
         self.repo = PackageRepository()
         self.monthly_engine = MonthlyEngine(self.repo)
@@ -78,14 +143,25 @@ class LeadTimeApp(tk.Tk):
         self._schedule_session_check()
 
     def refresh_session_status(self) -> bool:
-        """Dynamically refreshes the Google/Shopee session indicator in the UI."""
-        saved = self.syncer.is_session_saved()
+        """
+        Dynamically verifies Google/Shopee session via cookies inspection
+        and updates the modern UI status badge.
+        """
+        is_connected = self.syncer.has_shopee_session()
         if hasattr(self, "lbl_session_status"):
-            if saved:
-                self.lbl_session_status.config(text="Sessão Google: Conectada ✅", fg="#198754")
+            if is_connected:
+                self.lbl_session_status.config(
+                    text="🟢 Shopee SPX: Conectado ✅",
+                    bg="#ECFDF5",
+                    fg="#065F46",
+                )
             else:
-                self.lbl_session_status.config(text="Sessão Google: Pendente ⚠️", fg="#DC3545")
-        return saved
+                self.lbl_session_status.config(
+                    text="🟡 Shopee SPX: Sessão Pendente ⚠️",
+                    bg="#FFFBEB",
+                    fg="#92400E",
+                )
+        return is_connected
 
     def _schedule_session_check(self) -> None:
         """Periodically refreshes session status every 5 seconds."""
@@ -93,23 +169,23 @@ class LeadTimeApp(tk.Tk):
         self.after(5000, self._schedule_session_check)
 
     def _setup_styles(self) -> None:
-        """Configures ttk styles for clean visual appearance."""
+        """Configures ttk styles for a clean, modern SaaS appearance."""
         style = ttk.Style(self)
         style.theme_use("clam")
 
         # Notebook tabs styling
-        style.configure("TNotebook", background="#F4F6F9", borderwidth=0)
+        style.configure("TNotebook", background="#F8FAFC", borderwidth=0)
         style.configure(
             "TNotebook.Tab",
             font=("Segoe UI", 10, "bold"),
-            padding=(20, 8),
-            background="#DCE4EC",
-            foreground="#495057",
+            padding=(24, 10),
+            background="#E2E8F0",
+            foreground="#475569",
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", "#FFFFFF"), ("active", "#E9ECEF")],
-            foreground=[("selected", "#1F497D")],
+            background=[("selected", "#FFFFFF"), ("active", "#F1F5F9")],
+            foreground=[("selected", "#EE4D2D")],
         )
 
         style.configure(
@@ -117,72 +193,124 @@ class LeadTimeApp(tk.Tk):
             font=("Segoe UI", 11, "bold"),
             background="#EE4D2D",
             foreground="#FFFFFF",
-            padding=(15, 7),
+            padding=(20, 8),
+            borderwidth=0,
         )
-        style.map("Primary.TButton", background=[("active", "#D03E20")])
+        style.map("Primary.TButton", background=[("active", "#D73819")])
 
         style.configure(
             "Secondary.TButton",
-            font=("Segoe UI", 8),
-            background="#E9ECEF",
-            foreground="#212529",
-            padding=(8, 4),
+            font=("Segoe UI", 9),
+            background="#F1F5F9",
+            foreground="#1E293B",
+            padding=(10, 5),
+            borderwidth=1,
         )
+        style.map("Secondary.TButton", background=[("active", "#E2E8F0")])
+
         style.configure(
             "History.TButton",
             font=("Segoe UI", 9, "bold"),
-            background="#1F497D",
+            background="#0F172A",
             foreground="#FFFFFF",
-            padding=(12, 5),
+            padding=(14, 6),
+            borderwidth=0,
         )
-        style.map("History.TButton", background=[("active", "#153256")])
+        style.map("History.TButton", background=[("active", "#1E293B")])
 
         style.configure(
             "Sync.TButton",
-            font=("Segoe UI", 9, "bold"),
-            background="#0D6EFD",
+            font=("Segoe UI", 10, "bold"),
+            background="#2563EB",
             foreground="#FFFFFF",
-            padding=(10, 5),
+            padding=(14, 6),
+            borderwidth=0,
         )
-        style.map("Sync.TButton", background=[("active", "#0B5ED7")])
+        style.map("Sync.TButton", background=[("active", "#1D4ED8")])
 
     def _build_header(self) -> None:
-        """Builds top header banner."""
-        header_frame = tk.Frame(self, bg="#1F497D", height=75)
+        """Builds top modern header banner with branding and session pill."""
+        header_frame = tk.Frame(self, bg="#0F172A", height=78)
         header_frame.pack(fill="x", side="top")
 
+        # Accent top bar (Shopee orange)
+        accent_bar = tk.Frame(header_frame, bg="#EE4D2D", height=3)
+        accent_bar.pack(fill="x", side="top")
+
+        container = tk.Frame(header_frame, bg="#0F172A")
+        container.pack(fill="both", expand=True, padx=20, pady=8)
+
+        # Left branding
+        brand_frame = tk.Frame(container, bg="#0F172A")
+        brand_frame.pack(side="left", fill="y")
+
         title_label = tk.Label(
-            header_frame,
-            text="Agência Shopee - Lead Time Útil & Gestão Financeira",
+            brand_frame,
+            text="SHOPEE AGENCY PRO",
             font=("Segoe UI", 15, "bold"),
             fg="#FFFFFF",
-            bg="#1F497D",
+            bg="#0F172A",
         )
-        title_label.pack(anchor="w", padx=20, pady=(6, 1))
+        title_label.pack(anchor="w")
 
         subtitle_label = tk.Label(
-            header_frame,
-            text="Horário Útil Comercial: Seg a Sex 08:00 às 19:30 | Sáb 09:00 às 15:00 | Dom Fechado",
-            font=("Segoe UI", 8, "bold"),
-            fg="#F39C12",
-            bg="#1F497D",
+            brand_frame,
+            text="Gestão Operacional, Faturamento Consolidado & Lead Time Útil",
+            font=("Segoe UI", 9),
+            fg="#94A3B8",
+            bg="#0F172A",
         )
-        subtitle_label.pack(anchor="w", padx=20, pady=(0, 6))
+        subtitle_label.pack(anchor="w")
+
+        # Right session badge and business hours pill
+        right_frame = tk.Frame(container, bg="#0F172A")
+        right_frame.pack(side="right", fill="y")
+
+        hours_lbl = tk.Label(
+            right_frame,
+            text="🕒 Horário Útil: Seg-Sex 08:00–19:30 | Sáb 09:00–15:00",
+            font=("Segoe UI", 8, "bold"),
+            fg="#F59E0B",
+            bg="#1E293B",
+            padx=10,
+            pady=4,
+        )
+        hours_lbl.pack(side="right", padx=(10, 0))
+
+        is_connected = self.syncer.has_shopee_session()
+        self.lbl_session_status = tk.Label(
+            right_frame,
+            text="🟢 Shopee SPX: Conectado ✅" if is_connected else "🟡 Shopee SPX: Sessão Pendente ⚠️",
+            font=("Segoe UI", 8, "bold"),
+            bg="#ECFDF5" if is_connected else "#FFFBEB",
+            fg="#065F46" if is_connected else "#92400E",
+            padx=10,
+            pady=4,
+            relief="solid",
+            bd=1,
+        )
+        self.lbl_session_status.pack(side="right")
 
     def _build_notebook_tabs(self) -> None:
         """Builds tabbed view separating Current Month from Past Months History."""
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=20, pady=(6, 2))
+        self.notebook.pack(fill="both", expand=True, padx=20, pady=(10, 4))
 
         # Tab 1: Mês Atual
-        self.tab_current = tk.Frame(self.notebook, bg="#F4F6F9")
-        self.notebook.add(self.tab_current, text="📊  Mês Atual (Setembro/2026)")
+        self.tab_current_container = ScrollableFrame(self.notebook, bg="#F8FAFC")
+        self.tab_current = self.tab_current_container.scrollable_content
+        self.notebook.add(self.tab_current_container, text="📊  Mês Atual (Setembro/2026)")
         self._build_current_month_tab(self.tab_current)
 
         # Tab 2: Histórico de Meses Anteriores
-        self.tab_history = tk.Frame(self.notebook, bg="#F4F6F9")
-        self.notebook.add(self.tab_history, text="📅  Histórico de Meses Anteriores")
+        self.tab_history_container = ScrollableFrame(self.notebook, bg="#F8FAFC")
+        self.tab_history = self.tab_history_container.scrollable_content
+        self.notebook.add(self.tab_history_container, text="📅  Histórico de Meses Anteriores")
         self._build_history_tab(self.tab_history)
+
+        # Make sure scrollwheel works on inner controls
+        self.tab_current_container.bind_mousewheel(self.tab_current)
+        self.tab_history_container.bind_mousewheel(self.tab_history)
 
     # =========================================================================
     # TAB 1: CURRENT MONTH (MÊS ATUAL)
@@ -190,89 +318,108 @@ class LeadTimeApp(tk.Tk):
     def _build_current_month_tab(self, parent: tk.Widget) -> None:
         """Builds the main operational tab for the current month."""
         # 1. Automation Bar
-        auto_card = tk.Frame(parent, bg="#E8F4FD", bd=1, relief="solid")
-        auto_card.pack(fill="x", padx=5, pady=(6, 2))
+        auto_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        auto_card.pack(fill="x", padx=10, pady=(10, 6))
+
+        a_inner = tk.Frame(auto_card, bg="#FFFFFF", padx=14, pady=10)
+        a_inner.pack(fill="x")
 
         lbl_spx = tk.Label(
-            auto_card,
+            a_inner,
             text="🤖 Automação Shopee SPX:",
-            font=("Segoe UI", 9, "bold"),
-            bg="#E8F4FD",
-            fg="#084298",
+            font=("Segoe UI", 10, "bold"),
+            bg="#FFFFFF",
+            fg="#0F172A",
         )
-        lbl_spx.pack(side="left", padx=10, pady=5)
+        lbl_spx.pack(side="left", padx=(0, 10))
 
         btn_sync = ttk.Button(
-            auto_card,
+            a_inner,
             text="⚡ Sincronizar Agora (Download Automático)",
             style="Sync.TButton",
             command=self._start_portal_sync_thread,
         )
-        btn_sync.pack(side="left", padx=6, pady=5)
+        btn_sync.pack(side="left", padx=6)
 
         btn_login = tk.Button(
-            auto_card,
-            text="🔑 Conectar Conta Shopee",
-            font=("Segoe UI", 8, "bold"),
+            a_inner,
+            text="🔑 Conectar / Reconectar Conta",
+            font=("Segoe UI", 9, "bold"),
+            bg="#F1F5F9",
+            fg="#1E293B",
+            relief="solid",
+            bd=1,
+            cursor="hand2",
+            padx=10,
+            pady=4,
+            command=self._start_login_browser_thread,
+        )
+        btn_login.pack(side="left", padx=6)
+
+        btn_refresh = tk.Button(
+            a_inner,
+            text="🔄 Atualizar Status",
+            font=("Segoe UI", 8),
             bg="#FFFFFF",
-            fg="#1F497D",
+            fg="#475569",
             relief="groove",
             cursor="hand2",
             padx=8,
             pady=3,
-            command=self._start_login_browser_thread,
+            command=lambda: [self.refresh_session_status(), self._load_current_month_data()],
         )
-        btn_login.pack(side="left", padx=6, pady=5)
-
-        self.lbl_session_status = tk.Label(
-            auto_card,
-            text="Sessão Google: " + ("Conectada ✅" if self.syncer.is_session_saved() else "Pendente ⚠️"),
-            font=("Segoe UI", 8, "bold"),
-            bg="#E8F4FD",
-            fg="#198754" if self.syncer.is_session_saved() else "#DC3545",
-        )
-        self.lbl_session_status.pack(side="right", padx=10, pady=5)
+        btn_refresh.pack(side="right", padx=(6, 0))
 
         # 2. Local File Fallback Ingestion
-        file_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
-        file_card.pack(fill="x", padx=5, pady=(3, 2))
+        file_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        file_card.pack(fill="x", padx=10, pady=(0, 8))
 
-        f_top = tk.Frame(file_card, bg="#FFFFFF")
-        f_top.pack(fill="x", padx=12, pady=(4, 1))
+        f_inner = tk.Frame(file_card, bg="#FFFFFF", padx=14, pady=10)
+        f_inner.pack(fill="x")
 
-        tk.Label(f_top, text="Ou selecione arquivos locais do computador:", font=("Segoe UI", 8, "bold"), bg="#FFFFFF", fg="#495057").pack(side="left")
+        f_top = tk.Frame(f_inner, bg="#FFFFFF")
+        f_top.pack(fill="x", pady=(0, 6))
+
+        tk.Label(
+            f_top,
+            text="Ou selecione arquivos locais manualmente:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#FFFFFF",
+            fg="#334155",
+        ).pack(side="left")
 
         auto_find_btn = tk.Button(
             f_top,
-            text="Localizar em Downloads",
-            font=("Segoe UI", 8),
-            bg="#F8F9FA",
-            fg="#0D6EFD",
-            relief="groove",
+            text="🔍 Localizar Automaticamente em Downloads",
+            font=("Segoe UI", 8, "bold"),
+            bg="#EFF6FF",
+            fg="#2563EB",
+            relief="solid",
+            bd=1,
             cursor="hand2",
-            padx=6,
-            pady=1,
+            padx=8,
+            pady=2,
             command=self._handle_auto_find_both_files,
         )
         auto_find_btn.pack(side="right")
 
         # Row Drop-off
-        r_drop = tk.Frame(file_card, bg="#FFFFFF")
-        r_drop.pack(fill="x", padx=12, pady=(1, 1))
-        tk.Label(r_drop, text="Drop-off:", font=("Segoe UI", 8), bg="#FFFFFF", width=9, anchor="w").pack(side="left")
-        tk.Entry(r_drop, textvariable=self.dropoff_path_var, font=("Segoe UI", 8), bd=1, relief="solid").pack(side="left", fill="x", expand=True, padx=(0, 4))
+        r_drop = tk.Frame(f_inner, bg="#FFFFFF")
+        r_drop.pack(fill="x", pady=2)
+        tk.Label(r_drop, text="Drop-off:", font=("Segoe UI", 8, "bold"), bg="#FFFFFF", width=10, anchor="w", fg="#475569").pack(side="left")
+        tk.Entry(r_drop, textvariable=self.dropoff_path_var, font=("Segoe UI", 8), bd=1, relief="solid").pack(side="left", fill="x", expand=True, padx=(0, 6))
         ttk.Button(r_drop, text="Procurar...", style="Secondary.TButton", command=self._handle_browse_dropoff).pack(side="right")
 
         # Row Collection
-        r_coll = tk.Frame(file_card, bg="#FFFFFF")
-        r_coll.pack(fill="x", padx=12, pady=(1, 4))
-        tk.Label(r_coll, text="Retiradas:", font=("Segoe UI", 8), bg="#FFFFFF", width=9, anchor="w").pack(side="left")
-        tk.Entry(r_coll, textvariable=self.collection_path_var, font=("Segoe UI", 8), bd=1, relief="solid").pack(side="left", fill="x", expand=True, padx=(0, 4))
+        r_coll = tk.Frame(f_inner, bg="#FFFFFF")
+        r_coll.pack(fill="x", pady=2)
+        tk.Label(r_coll, text="Retiradas:", font=("Segoe UI", 8, "bold"), bg="#FFFFFF", width=10, anchor="w", fg="#475569").pack(side="left")
+        tk.Entry(r_coll, textvariable=self.collection_path_var, font=("Segoe UI", 8), bd=1, relief="solid").pack(side="left", fill="x", expand=True, padx=(0, 6))
         ttk.Button(r_coll, text="Procurar...", style="Secondary.TButton", command=self._handle_browse_collection).pack(side="right")
 
-        # 3. Action Button
-        action_frame = tk.Frame(parent, bg="#F4F6F9")
-        action_frame.pack(fill="x", padx=5, pady=(2, 2))
+        # 3. Main Action Button
+        action_frame = tk.Frame(parent, bg="#F8FAFC")
+        action_frame.pack(fill="x", padx=10, pady=(0, 10))
 
         self.btn_calculate = ttk.Button(
             action_frame,
@@ -280,88 +427,100 @@ class LeadTimeApp(tk.Tk):
             style="Primary.TButton",
             command=self._start_processing_thread,
         )
-        self.btn_calculate.pack(fill="x", ipady=2)
+        self.btn_calculate.pack(fill="x", ipady=4)
 
-        # 4. Current Month Dashboard KPIs
+        # 4. Current Month Dashboard KPIs (Responsive Grid)
         lbl_fin = tk.Label(
-            parent, text="INDICADORES CONSOLIDADOS DO MÊS ATUAL", font=("Segoe UI", 9, "bold"), fg="#198754", bg="#F4F6F9"
+            parent,
+            text="INDICADORES FINANCEIROS CONSOLIDADOS (MÊS ATUAL)",
+            font=("Segoe UI", 9, "bold"),
+            fg="#0F172A",
+            bg="#F8FAFC",
         )
-        lbl_fin.pack(anchor="w", padx=5, pady=(3, 1))
+        lbl_fin.pack(anchor="w", padx=10, pady=(2, 4))
 
-        fin_row = tk.Frame(parent, bg="#F4F6F9")
-        fin_row.pack(fill="x", padx=5, pady=(0, 4))
+        fin_grid = tk.Frame(parent, bg="#F8FAFC")
+        fin_grid.pack(fill="x", padx=6, pady=(0, 10))
+        for col_idx in range(4):
+            fin_grid.grid_columnconfigure(col_idx, weight=1)
 
-        self.cur_card_total_rev = self._create_kpi_card(
-            fin_row, "FATURAMENTO TOTAL DO MÊS", "R$ --,--", "Devoluções + Postagens + Retiradas", val_color="#198754"
+        self.cur_card_total_rev = self._create_modern_kpi_card(
+            fin_grid, "FATURAMENTO TOTAL DO MÊS", "R$ --,--", "Devoluções + Postagens + Retiradas", val_color="#059669", accent_color="#10B981"
         )
-        self.cur_card_total_rev.pack(side="left", fill="both", expand=True, padx=(0, 3))
+        self.cur_card_total_rev.grid(row=0, column=0, sticky="nsew", padx=4, pady=2)
 
-        self.cur_card_returns = self._create_kpi_card(
-            fin_row, "DEVOLUÇÕES (R$ 0,80)", "-- un", "R$ --,-- faturados", val_color="#0D6EFD"
+        self.cur_card_returns = self._create_modern_kpi_card(
+            fin_grid, "DEVOLUÇÕES (R$ 0,80)", "-- un", "R$ --,-- faturados", val_color="#2563EB", accent_color="#3B82F6"
         )
-        self.cur_card_returns.pack(side="left", fill="both", expand=True, padx=3)
+        self.cur_card_returns.grid(row=0, column=1, sticky="nsew", padx=4, pady=2)
 
-        self.cur_card_pooled_postagem = self._create_kpi_card(
-            fin_row, "POSTAGENS + RETIRADAS", "-- un", "R$ --,-- faturados (Faixas)", val_color="#212529"
+        self.cur_card_pooled_postagem = self._create_modern_kpi_card(
+            fin_grid, "POSTAGENS + RETIRADAS (POOL)", "-- un", "R$ --,-- faturados (Faixas)", val_color="#1E293B", accent_color="#64748B"
         )
-        self.cur_card_pooled_postagem.pack(side="left", fill="both", expand=True, padx=3)
+        self.cur_card_pooled_postagem.grid(row=0, column=2, sticky="nsew", padx=4, pady=2)
 
-        self.cur_card_volume_moved = self._create_kpi_card(
-            fin_row, "VOLUME TOTAL DO MÊS", "-- un", "Total movimentado no mês", val_color="#6F42C1"
+        self.cur_card_volume_moved = self._create_modern_kpi_card(
+            fin_grid, "VOLUME TOTAL FATURÁVEL", "-- un", "Saíram vs Recebidos", val_color="#7C3AED", accent_color="#8B5CF6"
         )
-        self.cur_card_volume_moved.pack(side="left", fill="both", expand=True, padx=(3, 0))
+        self.cur_card_volume_moved.grid(row=0, column=3, sticky="nsew", padx=4, pady=2)
 
-        # Lead Time Card
+        # 5. Lead Time Hero Card
         lbl_ops = tk.Label(
             parent,
             text="LEAD TIME ÚTIL DA AGÊNCIA (DROP-OFF ATÉ O CAMINHÃO)",
             font=("Segoe UI", 9, "bold"),
-            fg="#1F497D",
-            bg="#F4F6F9",
+            fg="#0F172A",
+            bg="#F8FAFC",
         )
-        lbl_ops.pack(anchor="w", padx=5, pady=(2, 1))
+        lbl_ops.pack(anchor="w", padx=10, pady=(4, 4))
 
-        lead_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
-        lead_card.pack(fill="both", expand=True, padx=5, pady=(1, 2))
+        lead_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        lead_card.pack(fill="x", padx=10, pady=(0, 10))
+
+        lead_top = tk.Frame(lead_card, bg="#EA580C", height=3)
+        lead_top.pack(fill="x", side="top")
+
+        lead_inner = tk.Frame(lead_card, bg="#FFFFFF", padx=16, pady=12)
+        lead_inner.pack(fill="x")
 
         lbl_lead_title = tk.Label(
-            lead_card,
+            lead_inner,
             text="TEMPO MÉDIO DE PERMANÊNCIA EM HORÁRIO DE FUNCIONAMENTO (MÊS ATUAL)",
             font=("Segoe UI", 9, "bold"),
             bg="#FFFFFF",
-            fg="#1F497D",
+            fg="#64748B",
         )
-        lbl_lead_title.pack(anchor="w", padx=14, pady=(6, 1))
+        lbl_lead_title.pack(anchor="w")
 
         self.cur_lbl_lead_value = tk.Label(
-            lead_card,
+            lead_inner,
             text="--:--:--",
-            font=("Segoe UI", 22, "bold"),
+            font=("Segoe UI", 26, "bold"),
             bg="#FFFFFF",
-            fg="#EE4D2D",
+            fg="#EA580C",
         )
-        self.cur_lbl_lead_value.pack(anchor="w", padx=14, pady=(0, 1))
+        self.cur_lbl_lead_value.pack(anchor="w", pady=(2, 2))
 
         self.cur_lbl_lead_details = tk.Label(
-            lead_card,
+            lead_inner,
             text="Média em minutos: -- | Horário de funcionamento: Seg-Sex 08h-19h30, Sáb 09h-15h",
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 9),
             bg="#FFFFFF",
-            fg="#6C757D",
+            fg="#475569",
         )
-        self.cur_lbl_lead_details.pack(anchor="w", padx=14, pady=(0, 3))
+        self.cur_lbl_lead_details.pack(anchor="w")
 
-        b_sub = tk.Frame(lead_card, bg="#F8F9FA", bd=1, relief="solid")
+        b_sub = tk.Frame(lead_card, bg="#F8FAFC", bd=1, relief="solid")
         b_sub.pack(fill="x", side="bottom")
 
         self.cur_lbl_ops_footer = tk.Label(
             b_sub,
             text="Menor tempo: --  |  Maior tempo: --  |  Mediana: --  |  Pacotes despachados: --",
-            font=("Segoe UI", 8),
-            bg="#F8F9FA",
-            fg="#495057",
-            padx=10,
-            pady=4,
+            font=("Segoe UI", 8, "bold"),
+            bg="#F8FAFC",
+            fg="#334155",
+            padx=14,
+            pady=6,
         )
         self.cur_lbl_ops_footer.pack(anchor="w")
 
@@ -370,18 +529,18 @@ class LeadTimeApp(tk.Tk):
     # =========================================================================
     def _build_history_tab(self, parent: tk.Widget) -> None:
         """Builds the dedicated tab for past months exploration."""
-        top_hist = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
-        top_hist.pack(fill="x", padx=5, pady=(8, 4))
+        top_hist = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        top_hist.pack(fill="x", padx=10, pady=(10, 8))
 
-        t_row = tk.Frame(top_hist, bg="#FFFFFF")
-        t_row.pack(fill="x", padx=12, pady=8)
+        t_row = tk.Frame(top_hist, bg="#FFFFFF", padx=14, pady=10)
+        t_row.pack(fill="x")
 
         lbl_sel = tk.Label(
             t_row,
-            text="Selecione o Mês Passado para Consultar:",
+            text="Selecione o Mês para Consultar:",
             font=("Segoe UI", 10, "bold"),
             bg="#FFFFFF",
-            fg="#1F497D",
+            fg="#0F172A",
         )
         lbl_sel.pack(side="left", padx=(0, 8))
 
@@ -397,159 +556,204 @@ class LeadTimeApp(tk.Tk):
             t_row,
             text="📥 Exportar Mês em Planilha Excel",
             font=("Segoe UI", 9, "bold"),
-            bg="#E8F5E9",
-            fg="#198754",
-            relief="groove",
+            bg="#ECFDF5",
+            fg="#059669",
+            relief="solid",
+            bd=1,
             cursor="hand2",
-            padx=10,
-            pady=3,
+            padx=12,
+            pady=5,
             command=self._handle_export_history_month_excel,
         )
         btn_export.pack(side="right")
 
-        # Historical KPI Section
+        # Historical KPI Section (Responsive Grid)
         lbl_hist_fin = tk.Label(
-            parent, text="INDICADORES FINANCEIROS DO MÊS CONSULTADO", font=("Segoe UI", 9, "bold"), fg="#198754", bg="#F4F6F9"
+            parent,
+            text="INDICADORES FINANCEIROS DO MÊS CONSULTADO",
+            font=("Segoe UI", 9, "bold"),
+            fg="#0F172A",
+            bg="#F8FAFC",
         )
-        lbl_hist_fin.pack(anchor="w", padx=5, pady=(6, 2))
+        lbl_hist_fin.pack(anchor="w", padx=10, pady=(4, 4))
 
-        hist_fin_row = tk.Frame(parent, bg="#F4F6F9")
-        hist_fin_row.pack(fill="x", padx=5, pady=(0, 4))
+        hist_fin_grid = tk.Frame(parent, bg="#F8FAFC")
+        hist_fin_grid.pack(fill="x", padx=6, pady=(0, 8))
+        for col_idx in range(4):
+            hist_fin_grid.grid_columnconfigure(col_idx, weight=1)
 
-        self.hist_card_total_rev = self._create_kpi_card(
-            hist_fin_row, "FATURAMENTO DO MÊS", "R$ --,--", "Total faturado no mês", val_color="#198754"
+        self.hist_card_total_rev = self._create_modern_kpi_card(
+            hist_fin_grid, "FATURAMENTO DO MÊS", "R$ --,--", "Total faturado no mês", val_color="#059669", accent_color="#10B981"
         )
-        self.hist_card_total_rev.pack(side="left", fill="both", expand=True, padx=(0, 3))
+        self.hist_card_total_rev.grid(row=0, column=0, sticky="nsew", padx=4, pady=2)
 
-        self.hist_card_returns = self._create_kpi_card(
-            hist_fin_row, "DEVOLUÇÕES (R$ 0,80)", "-- un", "R$ --,-- faturados", val_color="#0D6EFD"
+        self.hist_card_returns = self._create_modern_kpi_card(
+            hist_fin_grid, "DEVOLUÇÕES (R$ 0,80)", "-- un", "R$ --,-- faturados", val_color="#2563EB", accent_color="#3B82F6"
         )
-        self.hist_card_returns.pack(side="left", fill="both", expand=True, padx=3)
+        self.hist_card_returns.grid(row=0, column=1, sticky="nsew", padx=4, pady=2)
 
-        self.hist_card_pooled_postagem = self._create_kpi_card(
-            hist_fin_row, "POSTAGENS + RETIRADAS", "-- un", "R$ --,-- faturados", val_color="#212529"
+        self.hist_card_pooled_postagem = self._create_modern_kpi_card(
+            hist_fin_grid, "POSTAGENS + RETIRADAS", "-- un", "R$ --,-- faturados", val_color="#1E293B", accent_color="#64748B"
         )
-        self.hist_card_pooled_postagem.pack(side="left", fill="both", expand=True, padx=3)
+        self.hist_card_pooled_postagem.grid(row=0, column=2, sticky="nsew", padx=4, pady=2)
 
-        self.hist_card_volume_moved = self._create_kpi_card(
-            hist_fin_row, "VOLUME DO MÊS", "-- un", "Soma de todos os pacotes", val_color="#6F42C1"
+        self.hist_card_volume_moved = self._create_modern_kpi_card(
+            hist_fin_grid, "VOLUME DO MÊS", "-- un", "Soma de todos os pacotes", val_color="#7C3AED", accent_color="#8B5CF6"
         )
-        self.hist_card_volume_moved.pack(side="left", fill="both", expand=True, padx=(3, 0))
+        self.hist_card_volume_moved.grid(row=0, column=3, sticky="nsew", padx=4, pady=2)
 
         # Historical Tier Breakdown Details Card
-        self.hist_tier_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
-        self.hist_tier_card.pack(fill="x", padx=5, pady=(3, 4))
+        self.hist_tier_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        self.hist_tier_card.pack(fill="x", padx=10, pady=(0, 8))
+
+        t_accent = tk.Frame(self.hist_tier_card, bg="#3B82F6", height=3)
+        t_accent.pack(fill="x", side="top")
+
+        t_body = tk.Frame(self.hist_tier_card, bg="#FFFFFF", padx=14, pady=10)
+        t_body.pack(fill="x")
 
         lbl_tier_title = tk.Label(
-            self.hist_tier_card,
+            t_body,
             text="DETALHAMENTO DE FAIXAS PROGRESSIVAS DO MÊS",
             font=("Segoe UI", 9, "bold"),
             bg="#FFFFFF",
-            fg="#1F497D",
+            fg="#0F172A",
         )
-        lbl_tier_title.pack(anchor="w", padx=12, pady=(6, 1))
+        lbl_tier_title.pack(anchor="w", pady=(0, 4))
 
         self.lbl_hist_tiers_detail = tk.Label(
-            self.hist_tier_card,
+            t_body,
             text="Selecione um mês anterior acima para visualizar a distribuição das faixas de remuneração.",
             font=("Segoe UI", 9),
             bg="#FFFFFF",
-            fg="#495057",
+            fg="#475569",
+            justify="left",
         )
-        self.lbl_hist_tiers_detail.pack(anchor="w", padx=12, pady=(0, 6))
+        self.lbl_hist_tiers_detail.pack(anchor="w")
 
         # Historical Operational Lead Time Card
         lbl_hist_ops = tk.Label(
             parent,
             text="LEAD TIME ÚTIL DO MÊS CONSULTADO (DROP-OFF)",
             font=("Segoe UI", 9, "bold"),
-            fg="#1F497D",
-            bg="#F4F6F9",
+            fg="#0F172A",
+            bg="#F8FAFC",
         )
-        lbl_hist_ops.pack(anchor="w", padx=5, pady=(3, 1))
+        lbl_hist_ops.pack(anchor="w", padx=10, pady=(4, 4))
 
-        hist_lead_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
-        hist_lead_card.pack(fill="both", expand=True, padx=5, pady=(1, 2))
+        hist_lead_card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid", highlightbackground="#E2E8F0", highlightthickness=1)
+        hist_lead_card.pack(fill="x", padx=10, pady=(0, 10))
+
+        h_lead_top = tk.Frame(hist_lead_card, bg="#EA580C", height=3)
+        h_lead_top.pack(fill="x", side="top")
+
+        h_lead_body = tk.Frame(hist_lead_card, bg="#FFFFFF", padx=16, pady=10)
+        h_lead_body.pack(fill="x")
 
         self.hist_lbl_lead_value = tk.Label(
-            hist_lead_card,
+            h_lead_body,
             text="--:--:--",
-            font=("Segoe UI", 22, "bold"),
+            font=("Segoe UI", 24, "bold"),
             bg="#FFFFFF",
-            fg="#EE4D2D",
+            fg="#EA580C",
         )
-        self.hist_lbl_lead_value.pack(anchor="w", padx=14, pady=(6, 1))
+        self.hist_lbl_lead_value.pack(anchor="w", pady=(0, 2))
 
         self.hist_lbl_lead_details = tk.Label(
-            hist_lead_card,
+            h_lead_body,
             text="Média em minutos: -- | Mediana: -- | Despachados: --",
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 9),
             bg="#FFFFFF",
-            fg="#6C757D",
+            fg="#64748B",
         )
-        self.hist_lbl_lead_details.pack(anchor="w", padx=14, pady=(0, 4))
+        self.hist_lbl_lead_details.pack(anchor="w")
 
         self._refresh_history_months_dropdown()
 
     # =========================================================================
-    # HELPERS & LOGIC
+    # HELPERS & UI COMPONENTS
     # =========================================================================
-    def _create_kpi_card(
-        self, parent: tk.Widget, title: str, value: str, subtitle: str, val_color: str = "#212529"
+    def _create_modern_kpi_card(
+        self,
+        parent: tk.Widget,
+        title: str,
+        value: str,
+        subtitle: str,
+        val_color: str = "#0F172A",
+        accent_color: str = "#CBD5E1",
     ) -> tk.Frame:
-        """Helper to create standardized KPI card."""
+        """Helper to create standardized, responsive modern KPI card."""
         card = tk.Frame(parent, bg="#FFFFFF", bd=1, relief="solid")
 
-        lbl_title = tk.Label(card, text=title, font=("Segoe UI", 8, "bold"), bg="#FFFFFF", fg="#6C757D")
-        lbl_title.pack(anchor="w", padx=8, pady=(4, 1))
+        top_accent = tk.Frame(card, bg=accent_color, height=3)
+        top_accent.pack(fill="x", side="top")
 
-        lbl_value = tk.Label(card, text=value, font=("Segoe UI", 13, "bold"), bg="#FFFFFF", fg=val_color)
-        lbl_value.pack(anchor="w", padx=8, pady=(0, 1))
+        content = tk.Frame(card, bg="#FFFFFF", padx=12, pady=10)
+        content.pack(fill="both", expand=True)
 
-        lbl_sub = tk.Label(card, text=subtitle, font=("Segoe UI", 7), bg="#FFFFFF", fg="#ADB5BD")
-        lbl_sub.pack(anchor="w", padx=8, pady=(0, 4))
+        lbl_title = tk.Label(content, text=title, font=("Segoe UI", 8, "bold"), bg="#FFFFFF", fg="#64748B")
+        lbl_title.pack(anchor="w")
+
+        lbl_value = tk.Label(content, text=value, font=("Segoe UI", 16, "bold"), bg="#FFFFFF", fg=val_color)
+        lbl_value.pack(anchor="w", pady=(4, 2))
+
+        lbl_sub = tk.Label(
+            content,
+            text=subtitle,
+            font=("Segoe UI", 8),
+            bg="#FFFFFF",
+            fg="#94A3B8",
+            wraplength=260,
+            justify="left",
+        )
+        lbl_sub.pack(anchor="w")
 
         card.lbl_value = lbl_value
         card.lbl_sub = lbl_sub
         return card
 
     def _build_status_bar(self) -> None:
-        """Builds bottom bar with open buttons."""
-        bar = tk.Frame(self, bg="#E9ECEF", height=40)
+        """Builds bottom bar with quick open buttons and status text."""
+        bar = tk.Frame(self, bg="#E2E8F0", height=42)
         bar.pack(fill="x", side="bottom")
 
         self.status_label = tk.Label(
-            bar, textvariable=self.status_var, font=("Segoe UI", 8), bg="#E9ECEF", fg="#495057", anchor="w"
+            bar,
+            textvariable=self.status_var,
+            font=("Segoe UI", 9),
+            bg="#E2E8F0",
+            fg="#334155",
+            anchor="w",
         )
-        self.status_label.pack(side="left", fill="x", expand=True, padx=12, pady=6)
+        self.status_label.pack(side="left", fill="x", expand=True, padx=14, pady=8)
 
         self.btn_open_dropoff = tk.Button(
             bar,
             text="Abrir Drop-off no Excel",
             font=("Segoe UI", 8, "bold"),
-            bg="#198754",
+            bg="#10B981",
             fg="#FFFFFF",
             relief="flat",
             state="disabled",
             cursor="hand2",
-            padx=8,
+            padx=10,
             command=lambda: self._open_file(self.last_dropoff_file),
         )
-        self.btn_open_dropoff.pack(side="right", padx=(2, 10), pady=4)
+        self.btn_open_dropoff.pack(side="right", padx=(2, 10), pady=6)
 
         self.btn_open_collection = tk.Button(
             bar,
             text="Abrir Retiradas",
             font=("Segoe UI", 8, "bold"),
-            bg="#6F42C1",
+            bg="#8B5CF6",
             fg="#FFFFFF",
             relief="flat",
             state="disabled",
             cursor="hand2",
-            padx=8,
+            padx=10,
             command=lambda: self._open_file(self.last_collection_file),
         )
-        self.btn_open_collection.pack(side="right", padx=2, pady=4)
+        self.btn_open_collection.pack(side="right", padx=2, pady=6)
 
     def _load_current_month_data(self) -> None:
         """Loads and updates Tab 1 with current month data from SQLite."""
@@ -563,7 +767,7 @@ class LeadTimeApp(tk.Tk):
 
         self.cur_card_pooled_postagem.lbl_value.config(text=f"{rev_s.pooled_postagem_count} un")
         self.cur_card_pooled_postagem.lbl_sub.config(
-            text=f"{rev_s.standard_drop_count} post. + {rev_s.collection_count} retiradas (+ {rev_s.return_count} devoluções)"
+            text=f"{rev_s.standard_drop_count} post. + {rev_s.collection_count} ret. (Faixa 1: R$ 0,70)"
         )
 
         self.cur_card_volume_moved.lbl_value.config(
@@ -593,7 +797,6 @@ class LeadTimeApp(tk.Tk):
     def _refresh_history_months_dropdown(self) -> None:
         """Populates the history combobox with past months from SQLite."""
         all_months = self.monthly_engine.get_available_months()
-        # Filter past months (or include all)
         past_months = [m for m in all_months if m != self.current_month_str]
         self.hist_month_combo["values"] = past_months if past_months else all_months
         if past_months:
@@ -628,7 +831,6 @@ class LeadTimeApp(tk.Tk):
             text=f"Saíram: {rev_s.dispatched_drop_count} post. + {rev_s.collected_count} ret. | Recebidos: {rev_s.inbound_total_count} un | {rev_s.total_pending_count} no ponto"
         )
 
-        # Tier breakdown detail string
         tier_str = (
             f"• Mês {selected_month}: {rev_s.total_packages_moved} pacotes no total ({rev_s.standard_drop_count} postagens + {rev_s.collection_count} retiradas + {rev_s.return_count} devoluções)\n"
             f"  - Faixa 1 (1 a 500 un a R$ 0,70): {rev_s.tier1_count} un -> R$ {rev_s.tier1_revenue:.2f}\n"
@@ -722,17 +924,26 @@ class LeadTimeApp(tk.Tk):
             self.after(0, self._update_session_indicator, success)
         except Exception as e:
             if "Target" in str(e) or "closed" in str(e) or "Context" in str(e):
-                self.after(0, self._update_session_indicator, self.syncer.is_session_saved())
+                self.after(0, self._update_session_indicator, self.syncer.has_shopee_session())
             else:
                 self.after(0, self._show_error, f"Erro ao abrir navegador: {e}")
 
     def _update_session_indicator(self, success: bool) -> None:
-        if success or self.syncer.is_session_saved():
-            self.lbl_session_status.config(text="Sessão Google: Conectada ✅", fg="#198754")
+        is_conn = success or self.syncer.has_shopee_session()
+        if is_conn:
+            self.lbl_session_status.config(
+                text="🟢 Shopee SPX: Conectado ✅",
+                bg="#ECFDF5",
+                fg="#065F46",
+            )
             self.status_var.set("Sessão da Shopee conectada! Você pode usar a Sincronização Automática.")
             messagebox.showinfo("Sucesso", "Conta conectada com sucesso! O robô agora pode baixar os relatórios.")
         else:
-            self.lbl_session_status.config(text="Sessão Google: Pendente ⚠️", fg="#DC3545")
+            self.lbl_session_status.config(
+                text="🟡 Shopee SPX: Sessão Pendente ⚠️",
+                bg="#FFFBEB",
+                fg="#92400E",
+            )
             self.status_var.set("Janela de login fechada.")
 
     def _start_portal_sync_thread(self) -> None:
@@ -805,6 +1016,7 @@ class LeadTimeApp(tk.Tk):
                     loader_coll = ExcelLoader(p_coll)
                     df_coll_raw, _, _, _, _ = loader_coll.load_data()
                 except Exception:
+                    import pandas as pd
                     if p_coll.suffix.lower() == ".csv":
                         df_coll_raw = ExcelLoader._load_csv_safely(p_coll)
                     else:
