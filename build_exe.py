@@ -41,22 +41,19 @@ def build_executable() -> bool:
         print("[X] Falha na compilação do executável com PyInstaller.")
         return False
 
-    exe_target = DIST_DIR / "ShopeeAgencyPro" / "ShopeeAgencyPro.exe"
+    exe_target = DIST_DIR / "ShopeeAgencyPro.exe"
+    if not exe_target.exists():
+        exe_target = DIST_DIR / "ShopeeAgencyPro" / "ShopeeAgencyPro.exe"
+
     if not exe_target.exists():
         print(f"[X] Executável não localizado em: {exe_target}")
         return False
 
-    print(f"\n[2/3] Executável gerado com sucesso: {exe_target}")
-
-    # Copy assets into dist
-    assets_dist = DIST_DIR / "ShopeeAgencyPro" / "assets"
-    assets_dist.mkdir(parents=True, exist_ok=True)
-    if (BASE_DIR / "assets" / "icon.ico").exists():
-        shutil.copy2(BASE_DIR / "assets" / "icon.ico", assets_dist / "icon.ico")
-        print("  + Ícone copiado para dist/ShopeeAgencyPro/assets/icon.ico")
+    print(f"\n[2/3] Executável único gerado com sucesso: {exe_target}")
+    print(f"      Tamanho do executável: {exe_target.stat().st_size / (1024 * 1024):.1f} MB")
 
     # Create 1-click desktop shortcut creator inside dist
-    shortcut_vbs = DIST_DIR / "ShopeeAgencyPro" / "Criar_Atalho_Area_de_Trabalho.vbs"
+    shortcut_vbs = DIST_DIR / "Criar_Atalho_Area_de_Trabalho.vbs"
     vbs_content = r"""Set oWS = WScript.CreateObject("WScript.Shell")
 strDesktop = oWS.SpecialFolders("Desktop")
 strCurrentDir = CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)
@@ -65,15 +62,13 @@ Set oLink = oWS.CreateShortcut(strDesktop & "\Shopee Agency Pro.lnk")
 oLink.TargetPath = strCurrentDir & "\ShopeeAgencyPro.exe"
 oLink.WorkingDirectory = strCurrentDir
 oLink.Description = "Shopee Agency Pro - Gestao e Lead Time"
-If CreateObject("Scripting.FileSystemObject").FileExists(strCurrentDir & "\assets\icon.ico") Then
-    oLink.IconLocation = strCurrentDir & "\assets\icon.ico"
-End If
 oLink.Save
 MsgBox "Atalho 'Shopee Agency Pro' criado com sucesso na Area de Trabalho!", vbInformation, "Shopee Agency Pro"
 """
     with open(shortcut_vbs, "w", encoding="utf-8") as f:
         f.write(vbs_content)
     print("  + Script de criação de atalho na Área de Trabalho gerado.")
+
 
     print("\n[3/3] Concluído com êxito!")
     print("=" * 80)

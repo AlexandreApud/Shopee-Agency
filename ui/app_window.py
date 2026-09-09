@@ -8,9 +8,11 @@ Graphical User Interface (GUI) module for Shopee Drop-off & Collection Lead Time
 - Modern responsive layout with native window maximization ('zoomed') and scrollable viewport.
 """
 
+import sys
 import os
 import threading
 from datetime import datetime
+
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -96,12 +98,16 @@ class LeadTimeApp(tk.Tk):
         self.title("Shopee Agency Pro - Gestão Financeira, Lead Time Útil & Histórico")
 
         # Set window icon if available
-        icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            icon_path = Path(sys._MEIPASS) / "assets" / "icon.ico"
+        else:
+            icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
         if icon_path.exists():
             try:
                 self.iconbitmap(str(icon_path))
             except Exception:
                 pass
+
 
         # Responsive window setup: Start natively maximized on Windows
 

@@ -7,22 +7,26 @@ from datetime import time
 from pathlib import Path
 from typing import Optional
 
+import sys
 import os
 import tempfile
 
-# Base project directory
-BASE_DIR = Path(__file__).resolve().parent
-
 IS_VERCEL = bool(os.environ.get("VERCEL"))
+
+if getattr(sys, "frozen", False):
+    # Standalone compiled executable running on client machines
+    APP_DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ShopeeAgencyPro"
+    BASE_DIR = APP_DATA_DIR
+    DATA_DIR = APP_DATA_DIR / "data"
+    DEFAULT_OUTPUT_DIR = APP_DATA_DIR / "output"
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+    DATA_DIR = (Path(tempfile.gettempdir()) / "data") if IS_VERCEL else (BASE_DIR / "data")
+    DEFAULT_OUTPUT_DIR = (Path(tempfile.gettempdir()) / "output") if IS_VERCEL else (BASE_DIR / "output")
 
 # Default watch directory for scanning input files (resolves to Downloads locally, or /tmp in serverless)
 DEFAULT_WATCH_DIR = Path(tempfile.gettempdir()) if IS_VERCEL else (Path.home() / "Downloads")
 
-# Default directory to save standalone output results if not updating in-place
-DEFAULT_OUTPUT_DIR = (Path(tempfile.gettempdir()) / "output") if IS_VERCEL else (BASE_DIR / "output")
-
-# Directory for local database and persistent browser profile storage
-DATA_DIR = (Path(tempfile.gettempdir()) / "data") if IS_VERCEL else (BASE_DIR / "data")
 
 # --- Operating Business Schedule (Agency Open Hours) ---
 # Monday to Friday: 08:00 to 19:30
